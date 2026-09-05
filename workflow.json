@@ -1,0 +1,195 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ghl-lead-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "143935ee-56c7-40ac-a66a-6cffff8be540",
+      "name": "GHL Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-592, 256],
+      "webhookId": "a5d29c0c-6b6e-47fc-b9ed-9372b1a75f0a"
+    },
+    {
+      "parameters": {
+        "content": "## 🤖 AI Automation - GHL Lead Pipeline\n\n**Yeh workflow kya karta hai:**\n\n1. 🪝 **GHL Webhook** — Jab bhi koi lead funnel form submit kare, GHL yahan data bhejta hai\n2. 📊 **Lead Scoring** — Lead ka score calculate hota hai budget aur business size ke basis pe\n   - Hot Lead = 60+ points\n   - Warm Lead = 30-59 points\n   - Cold Lead = 0-29 points\n3. 🔀 **Smart Routing** — Hot leads priority queue mein, cold leads nurture sequence mein\n4. 🤖 **AI Message** — OpenRouter (free model) se har lead ke liye personalized message generate hota hai\n5. 📊 **Google Sheets** — Sab lead data automatically sheet mein save hota hai\n\n**Setup ke liye:**\n- OpenRouter API key add karo HTTP Request node mein\n- Google Sheets node mein apni sheet connect karo\n- GHL mein webhook URL add karo",
+        "height": 640,
+        "width": 2068,
+        "color": 3
+      },
+      "id": "1c8e4ac9-cb15-4d41-82b0-25b4a42bd554",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1168, -80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body || $input.first().json;\n\nconst budget = data.budget || data['custom_fields.budget'] || '';\nconst businessSize = data.business_size || data['custom_fields.business_size'] || '';\n\nlet score = 0;\n\nif (budget === '$5k+') score += 40;\nelse if (budget === '$2k-$5k') score += 30;\nelse if (budget === '$500-$2k') score += 20;\nelse if (budget === 'Under $500') score += 5;\n\nif (businessSize === 'Enterprise') score += 40;\nelse if (businessSize === 'Medium') score += 30;\nelse if (businessSize === 'Small') score += 20;\nelse if (businessSize === 'Solo') score += 10;\n\nconst leadType = score >= 60 ? 'hot' : score >= 30 ? 'warm' : 'cold';\n\nreturn [{\n  json: {\n    first_name: data.first_name || data.firstName || '',\n    last_name: data.last_name || data.lastName || '',\n    email: data.email || '',\n    phone: data.phone || '',\n    business_type: data.business_type || '',\n    business_size: businessSize,\n    budget: budget,\n    current_tools: data.current_tools || '',\n    main_problem: data.main_problem || '',\n    lead_score: score,\n    lead_type: leadType,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "16d47652-a4f7-46d7-b690-e283885d8528",
+      "name": "Lead Scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-384, 256]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{"value1": "={{ $json.lead_type }}", "value2": "hot"}]
+        }
+      },
+      "id": "5983a8fd-f5d9-46d5-b228-3f7b96223fe0",
+      "name": "Hot or Cold?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-192, 256]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer YOUR_OPENROUTER_API_KEY_HERE"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"meta-llama/llama-3.1-8b-instruct\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an AI Automation Expert. Write a short, personalized, friendly outreach message for a HOT lead. Max 3 sentences. Be direct and value-focused.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Lead Name: {{ $json.first_name }} {{ $json.last_name }}\\nBusiness Type: {{ $json.business_type }}\\nBudget: {{ $json.budget }}\\nMain Problem: {{ $json.main_problem }}\\nLead Score: {{ $json.lead_score }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "600d758f-0f56-43a5-b7eb-631e801addb4",
+      "name": "AI Message - Hot Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [16, 112]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer YOUR_OPENROUTER_API_KEY_HERE"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"meta-llama/llama-3.1-8b-instruct\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an AI Automation Expert. Write a short, educational, nurture message for a COLD lead. Max 3 sentences. Focus on education and value.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Lead Name: {{ $json.first_name }} {{ $json.last_name }}\\nBusiness Type: {{ $json.business_type }}\\nBudget: {{ $json.budget }}\\nMain Problem: {{ $json.main_problem }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "aa81b5c2-3eda-4b65-be49-79e4330364d4",
+      "name": "AI Message - Cold Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [16, 368]
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.first().json;\nconst aiMessage = aiResponse.choices?.[0]?.message?.content || 'Follow up with this lead personally.';\n\nconst leadData = $('Lead Scoring').first().json;\n\nreturn [{\n  json: {\n    first_name: leadData.first_name,\n    last_name: leadData.last_name,\n    email: leadData.email,\n    phone: leadData.phone,\n    business_type: leadData.business_type,\n    business_size: leadData.business_size,\n    budget: leadData.budget,\n    current_tools: leadData.current_tools,\n    main_problem: leadData.main_problem,\n    lead_score: leadData.lead_score,\n    lead_type: leadData.lead_type,\n    ai_message: aiMessage,\n    timestamp: leadData.timestamp\n  }\n}];"
+      },
+      "id": "be24d57a-6f32-4f04-ad20-32b4782d883e",
+      "name": "Extract AI Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 256]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {"id": "first_name", "displayName": "first_name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "last_name", "displayName": "last_name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "email", "displayName": "email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "phone", "displayName": "phone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "business_type", "displayName": "business_type", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "business_size", "displayName": "business_size", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "budget", "displayName": "budget", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "current_tools", "displayName": "current_tools", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "main_problem", "displayName": "main_problem", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "lead_score", "displayName": "lead_score", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "lead_type", "displayName": "lead_type", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "ai_message", "displayName": "ai_message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "timestamp", "displayName": "timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4b1b8512-ecae-4ec6-88d1-e60fcb7a7b1c",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [512, 256]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Lead processed successfully\" }",
+        "options": {}
+      },
+      "id": "5f98257b-b226-4827-aa06-af97907c2189",
+      "name": "Respond to GHL",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [736, 256]
+    }
+  ],
+  "connections": {
+    "GHL Webhook": {
+      "main": [[{"node": "Lead Scoring", "type": "main", "index": 0}]]
+    },
+    "Lead Scoring": {
+      "main": [[{"node": "Hot or Cold?", "type": "main", "index": 0}]]
+    },
+    "Hot or Cold?": {
+      "main": [
+        [{"node": "AI Message - Hot Lead", "type": "main", "index": 0}],
+        [{"node": "AI Message - Cold Lead", "type": "main", "index": 0}]
+      ]
+    },
+    "AI Message - Hot Lead": {
+      "main": [[{"node": "Extract AI Message", "type": "main", "index": 0}]]
+    },
+    "AI Message - Cold Lead": {
+      "main": [[{"node": "Extract AI Message", "type": "main", "index": 0}]]
+    },
+    "Extract AI Message": {
+      "main": [[{"node": "Save to Google Sheets", "type": "main", "index": 0}]]
+    },
+    "Save to Google Sheets": {
+      "main": [[{"node": "Respond to GHL", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ed9d12158d8f47f13fecebcc23acd20fc880e727ad03c8d5294c0bf76d713256"
+  }
+}
