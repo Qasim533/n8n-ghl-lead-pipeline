@@ -1,6 +1,6 @@
 # 🤖 GHL Lead Pipeline — AI Scoring + Google Sheets (n8n)
 
-Jab bhi koi lead GHL funnel form submit kare, yeh workflow automatically lead score karta hai, Hot ya Cold route karta hai, AI se personalized message generate karta hai, aur Google Sheets mein save karta hai.
+Whenever a lead submits a GHL funnel form, this workflow automatically scores the lead, routes them as Hot or Cold, generates a personalized AI message, and saves everything to Google Sheets.
 
 ## Flow
 
